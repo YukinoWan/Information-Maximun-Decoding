@@ -4,6 +4,9 @@ import os
 import re
 from dataclasses import dataclass, field
 from typing import Optional
+import sys
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import torch
 import torchaudio
@@ -11,6 +14,7 @@ import transformers
 from tqdm import tqdm
 from transformers import AutoProcessor, HfArgumentParser, Qwen2AudioForConditionalGeneration
 
+from APIs.gpt import generate_gpt_response
 
 @dataclass
 class TestArguments:
@@ -58,22 +62,16 @@ def _get_message(obj_dict):
     ]
     return message
 
+def _get_text_message(obj_dict):
+    choice_str = f"Please choose the answer from the following options: {obj_dict['choices']}."
+    question_template = f"{obj_dict['question']} {choice_str} Output the final answer in <answer> </answer>."
+    # If you want to improve the thinking process, uncomment the next line and design your strategy.
+    # question_template = f"{obj_dict['question']} {choice_str} Output the thinking process in <think> </think> and final answer in <answer> </answer>."
+    print(question_template)
 
-def main():
-    parser = HfArgumentParser(TestArguments)
-    data_args = parser.parse_args_into_dataclasses()[0]
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    transformers.logging.set_verbosity_info()
-    logging.info(data_args)
+    return question_template
 
-    if not data_args.force and os.path.exists(data_args.out_file) and os.path.getsize(data_args.out_file) > 0:
-        logging.info(f"The {data_args.out_file} exists. Do not regenerate it.")
-        return
-    
-    out_dir = os.path.abspath(os.path.dirname(data_args.out_file))
-    if not os.path.exists(out_dir):
-        os.makedirs(out_dir)
-
+def get_qwen2_audio_response(data_args):
     audio_processor = AutoProcessor.from_pretrained(data_args.model_path)
     audio_model = Qwen2AudioForConditionalGeneration.from_pretrained(data_args.model_path, torch_dtype=torch.bfloat16, device_map="auto")
 
@@ -108,6 +106,49 @@ def main():
         )
         all_outputs.extend(response)
         print(f"Processed batch {i//batch_size + 1}/{(len(datas) + batch_size - 1)//batch_size}")
+    return datas, all_outputs
+
+def get_gpt4o_response(data_args):
+    datas = []
+    with open(data_args.data_file, "r") as f:
+        datas = json.load(f)
+    
+    all_outputs = []
+    batch_size = data_args.batch_size
+    for i in tqdm(range(0, len(datas), batch_size)):
+        batch_data = datas[i : i + batch_size]
+
+        batch_messages = []
+        batch_response = []
+        for bd in batch_data:
+            batch_messages.append(_get_text_message(bd))
+            response = generate_gpt_response(data_args.model_path, _get_text_message(bd))
+            batch_response.append(response)
+
+        all_outputs.extend(batch_response)
+        print(f"Processed batch {i//batch_size + 1}/{(len(datas) + batch_size - 1)//batch_size}")
+    return datas, all_outputs
+
+
+def main():
+    parser = HfArgumentParser(TestArguments)
+    data_args = parser.parse_args_into_dataclasses()[0]
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    transformers.logging.set_verbosity_info()
+    logging.info(data_args)
+
+    if not data_args.force and os.path.exists(data_args.out_file) and os.path.getsize(data_args.out_file) > 0:
+        logging.info(f"The {data_args.out_file} exists. Do not regenerate it.")
+        return
+    
+    out_dir = os.path.abspath(os.path.dirname(data_args.out_file))
+    if not os.path.exists(out_dir):
+        os.makedirs(out_dir)
+
+    if "gpt" in data_args.model_path:
+        datas, all_outputs = get_gpt4o_response(data_args)
+    else:
+        datas, all_outputs = get_qwen2_audio_response(data_args)
 
     def extract_answer(output_str):
         answer_pattern = r"<answer>(.*?)</answer>"
@@ -124,9 +165,10 @@ def main():
 
         # Create a result dictionary for this example
         result = input_example
-        result["model_prediction"] = model_answer
+        result[f"{data_args.model_path}_model_prediction"] = model_answer
         final_output.append(result)
 
+    
     # Save results to a JSON file
     output_path = data_args.out_file
     with open(output_path, "w") as f:

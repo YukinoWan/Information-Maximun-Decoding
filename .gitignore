@@ -174,7 +174,9 @@ Qwen
 
 # Data
 data/AVQA
-data/MMAU/test-mini-audios
+data/MMAU/
 
 # Work
 exp
+
+APIs/
