@@ -1,17 +1,17 @@
 ******************************
 Task-wise Accuracy:
-sound : 6.91% over 333 samples
-music : 8.08% over 334 samples
+sound : 7.51% over 333 samples
+music : 7.49% over 334 samples
 speech : 16.52% over 333 samples
 ******************************
 Difficulty-wise Accuracy:
-easy : 9.69% over 258 samples
-hard : 17.24% over 232 samples
-medium : 7.84% over 510 samples
+easy : 10.08% over 258 samples
+hard : 17.67% over 232 samples
+medium : 7.45% over 510 samples
 ******************************
 Sub-category-wise Accuracy:
-Acoustic Source Inference : 18.75% over 48 samples
-Temporal Event Reasoning : 0.00% over 48 samples
+Acoustic Source Inference : 22.92% over 48 samples
+Temporal Event Reasoning : 6.25% over 48 samples
 Dissonant Emotion Interpretation : 0.00% over 20 samples
 Event-Based Knowledge Retrieval : 0.00% over 20 samples
 Counting : 5.00% over 20 samples
@@ -22,21 +22,21 @@ Key highlight Extraction : 5.00% over 20 samples
 Multi Speaker Role Mapping : 0.00% over 20 samples
 Phonological Sequence Decoding : 5.00% over 20 samples
 Emotion Flip Detection : 0.00% over 20 samples
-Instrumentation : 22.86% over 35 samples
+Instrumentation : 20.00% over 35 samples
 Temporal Reasoning : 0.00% over 56 samples
-Lyrical Reasoning : 0.00% over 10 samples
-Socio-cultural Interpretation : 10.00% over 20 samples
+Lyrical Reasoning : 10.00% over 10 samples
+Socio-cultural Interpretation : 5.00% over 20 samples
 Rhythm and Tempo Understanding : 4.35% over 46 samples
-Musical Texture Interpretation : 11.76% over 34 samples
-Melodic Structure Interpretation : 12.12% over 33 samples
-Harmony and Chord Progressions : 3.03% over 33 samples
-Musical Genre Reasoning : 8.82% over 34 samples
-Event-Based Sound Reasoning : 0.00% over 48 samples
+Musical Texture Interpretation : 8.82% over 34 samples
+Melodic Structure Interpretation : 6.06% over 33 samples
+Harmony and Chord Progressions : 0.00% over 33 samples
+Musical Genre Reasoning : 17.65% over 34 samples
+Event-Based Sound Reasoning : 2.08% over 48 samples
 Emotional Tone Interpretation : 9.09% over 33 samples
-Eco-Acoustic Knowledge : 14.89% over 47 samples
+Eco-Acoustic Knowledge : 12.77% over 47 samples
 Ambient Sound Interpretation : 0.00% over 48 samples
-Acoustic Scene Reasoning : 4.17% over 48 samples
-Sound-Based Event Recognition : 10.87% over 46 samples
+Acoustic Scene Reasoning : 0.00% over 48 samples
+Sound-Based Event Recognition : 8.70% over 46 samples
 ******************************
 Total Accuracy: 10.50% over 1000 samples
 ******************************

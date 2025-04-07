@@ -69,6 +69,30 @@ def _get_message(obj_dict, mode):
                 f"content verbatim, including any significant pauses, emotions, or emphasis expressed by "
                 f"the speaker. Do not include interpretations or descriptions beyond the spoken words."
             )
+    elif mode == "caption_with_question":
+        if obj_dict["task"] == "sound":
+            question_template = (
+                f"I am asked to answer the question: \"{obj_dict['question']}\". "
+                f"Please describe all the events and sounds occurring in the audio clip in detail. Identify "
+                f"and describe each sound source, such as objects, animals, weather, or environmental "
+                f"noises. Include information about the sequence of events and any interactions between "
+                f"sound sources. Mention the context or setting if it can be inferred from the sounds."
+            )
+        elif obj_dict["task"] == "music":
+            question_template = (
+                f"I am asked to answer the question: \"{obj_dict['question']}\". "
+                f"Please provide a detailed description of the music in the audio clip. Include information "
+                f"about the genre, instruments, tempo, mood, and any notable melodies or harmonies. Describe any "
+                f"vocals present, including lyrics if they are clear and discernible. Mention the overall atmosphere "
+                f"and emotions conveyed by the music."
+            )
+        elif obj_dict["task"] == "speech":
+            question_template = (
+                f"I am asked to answer the question: \"{obj_dict['question']}\". "
+                f"Please transcribe the spoken words in the audio clip accurately. Capture all spoken "
+                f"content verbatim, including any significant pauses, emotions, or emphasis expressed by "
+                f"the speaker. Do not include interpretations or descriptions beyond the spoken words."
+            )
     else:
         choice_str = f"Please choose the answer from the following options: {obj_dict['choices']}."
         question_template = f"{obj_dict['question']} {choice_str} Output the final answer in <answer> </answer>."
