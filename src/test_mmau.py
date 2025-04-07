@@ -102,7 +102,6 @@ def _get_text_message(obj_dict, mode):
     # If you want to improve the thinking process, uncomment the next line and design your strategy.
     # question_template = f"{obj_dict['question']} {choice_str} Output the thinking process in <think> </think> and final answer in <answer> </answer>."
     print(question_template)
-    assert False
 
     return question_template
 
@@ -159,10 +158,9 @@ def get_gpt4o_response(data_args):
     for i in tqdm(range(0, len(datas), batch_size)):
         batch_data = datas[i : i + batch_size]
 
-        batch_messages = []
+
         batch_response = []
         for bd in batch_data:
-            batch_messages.append(_get_text_message(bd, data_args.mode))
             response = generate_gpt_response(data_args.model_path, _get_text_message(bd, data_args.mode))
             batch_response.append(response)
 
