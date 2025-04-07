@@ -1,0 +1,17 @@
+******************************
+Task-wise Accuracy:
+sound : 30.00% over 10 samples
+music : 0.00% over 0 samples
+speech : 0.00% over 0 samples
+******************************
+Difficulty-wise Accuracy:
+easy : 0.00% over 0 samples
+hard : 0.00% over 0 samples
+medium : 30.00% over 10 samples
+******************************
+Sub-category-wise Accuracy:
+Acoustic Source Inference : 30.00% over 10 samples
+******************************
+Total Accuracy: 30.00% over 10 samples
+******************************
+No prediction count: 0

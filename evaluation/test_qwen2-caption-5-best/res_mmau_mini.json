@@ -1,0 +1,21 @@
+[
+  {
+    "id": "3fe64f3d-282c-4bc8-a753-68f8f6c35652",
+    "audio_id": "./test-mini-audios/3fe64f3d-282c-4bc8-a753-68f8f6c35652.wav",
+    "question": "Based on the given audio, identify the source of the speaking voice.",
+    "choices": [
+      "Man",
+      "Woman",
+      "Child",
+      "Robot"
+    ],
+    "answer": "Man",
+    "dataset": "AudioSet",
+    "task": "sound",
+    "split": "test-mini",
+    "category": "Reasoning",
+    "sub-category": "Acoustic Source Inference",
+    "difficulty": "medium",
+    "model_prediction": "The audio clip contains various sound effects with no specific source. The sequence starts with an explosion at time interval (0.00,0.93), followed by impact sounds at intervals (1.24,2.78) and (3.63,5.16). There's also music playing throughout the duration of the clip from (0.00,10.00).\n\nIntermittently, there are male speech occurrences at (1.06,1.46), (2.99,3.57), (3.76,4.03), (4.31,4.60), (4.84,5.46), (5.64,6.16), (6.36,6.87), (7.14,7.59), (7.78,8.33), (8.60,9.10), and (9.28,10.00). Additionally, there is a sound resembling a 'boing' effect at (6.03,6.36).\n\nThroughout the clip, there are other sourceless sound effects that cannot"
+  }
+]

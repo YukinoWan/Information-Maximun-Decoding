@@ -31,6 +31,8 @@ class TestArguments:
     out_file: Optional[str] = field(default=None, metadata={"help": "output file for test"})
     batch_size: Optional[int] =  field(default=16, metadata={"help": "batch size"})
     force: Optional[bool] = field(default=False, metadata={"help": "force test"})
+    mode: Optional[str] = field(default="inference", metadata={"help": "mode"})
+    temperature: Optional[float] = field(default=0.7, metadata={"help": "temperature"})
 
     def __post_init__(self):
         if self.model_path is None:
@@ -45,12 +47,35 @@ def _get_audio(wav_path):
     return audio
 
 
-def _get_message(obj_dict):
-    choice_str = f"Please choose the answer from the following options: {obj_dict['choices']}."
-    question_template = f"{obj_dict['question']} {choice_str} Output the final answer in <answer> </answer>."
+def _get_message(obj_dict, mode):
+    if mode == "caption":
+        if obj_dict["task"] == "sound":
+            question_template = (
+                f"Please describe all the events and sounds occurring in the audio clip in detail. Identify "
+                f"and describe each sound source, such as objects, animals, weather, or environmental "
+                f"noises. Include information about the sequence of events and any interactions between "
+                f"sound sources. Mention the context or setting if it can be inferred from the sounds."
+            )
+        elif obj_dict["task"] == "music":
+            question_template = (
+                f"Please provide a detailed description of the music in the audio clip. Include information "
+                f"about the genre, instruments, tempo, mood, and any notable melodies or harmonies. Describe any "
+                f"vocals present, including lyrics if they are clear and discernible. Mention the overall atmosphere "
+                f"and emotions conveyed by the music."
+            )
+        elif obj_dict["task"] == "speech":
+            question_template = (
+                f"Please transcribe the spoken words in the audio clip accurately. Capture all spoken "
+                f"content verbatim, including any significant pauses, emotions, or emphasis expressed by "
+                f"the speaker. Do not include interpretations or descriptions beyond the spoken words."
+            )
+    else:
+        choice_str = f"Please choose the answer from the following options: {obj_dict['choices']}."
+        question_template = f"{obj_dict['question']} {choice_str} Output the final answer in <answer> </answer>."
     # If you want to improve the thinking process, uncomment the next line and design your strategy.
     # question_template = f"{obj_dict['question']} {choice_str} Output the thinking process in <think> </think> and final answer in <answer> </answer>."
     print(question_template)
+
     message = [
         {
             "role": "user",
@@ -62,23 +87,38 @@ def _get_message(obj_dict):
     ]
     return message
 
-def _get_text_message(obj_dict):
-    choice_str = f"Please choose the answer from the following options: {obj_dict['choices']}."
-    question_template = f"{obj_dict['question']} {choice_str} Output the final answer in <answer> </answer>."
+def _get_text_message(obj_dict, mode):
+    if mode == "caption":
+        choice_str = f"Please choose the answer from the following options: {obj_dict['choices']}."
+        question_template = f"{obj_dict['question']} {choice_str} Output the final answer in <answer> </answer>."
+    else:
+        choice_str = f"Please choose the answer from the following options: {obj_dict['choices']}."
+        question_template = (
+            f"{obj_dict['question'].replace('given audio', 'audio caption')} "
+            f"{choice_str} Output the final answer in <answer> </answer>.\n"
+            f"Audio caption: {obj_dict['model_prediction']}"
+        )
+
     # If you want to improve the thinking process, uncomment the next line and design your strategy.
     # question_template = f"{obj_dict['question']} {choice_str} Output the thinking process in <think> </think> and final answer in <answer> </answer>."
     print(question_template)
+    assert False
 
     return question_template
 
 def get_qwen2_audio_response(data_args):
     audio_processor = AutoProcessor.from_pretrained(data_args.model_path)
     audio_model = Qwen2AudioForConditionalGeneration.from_pretrained(data_args.model_path, torch_dtype=torch.bfloat16, device_map="auto")
+    audio_model.generation_config.temperature = data_args.temperature
+
 
     datas = []
+
     with open(data_args.data_file, "r") as f:
         datas = json.load(f)
     
+    # datas = datas[:10]
+
     all_outputs = []
     batch_size = data_args.batch_size
     for i in tqdm(range(0, len(datas), batch_size)):
@@ -87,7 +127,7 @@ def get_qwen2_audio_response(data_args):
         batch_messages = []
         batch_audios = []
         for bd in batch_data:
-            batch_messages.append(_get_message(bd))
+            batch_messages.append(_get_message(bd, data_args.mode))
             audio_path = os.path.join(data_args.audio_dir, bd["audio_id"])
             batch_audios.append(_get_audio(audio_path).numpy())
 
@@ -99,7 +139,8 @@ def get_qwen2_audio_response(data_args):
             text=text, audios=batch_audios, sampling_rate=16000, return_tensors="pt", padding=True
         ).to(audio_model.device)
 
-        generated_ids = audio_model.generate(**inputs, max_new_tokens=256)
+        generated_ids = audio_model.generate(**inputs, max_new_tokens=1024)
+
         generated_ids = generated_ids[:, inputs.input_ids.size(1) :]
         response = audio_processor.batch_decode(
             generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False
@@ -121,8 +162,8 @@ def get_gpt4o_response(data_args):
         batch_messages = []
         batch_response = []
         for bd in batch_data:
-            batch_messages.append(_get_text_message(bd))
-            response = generate_gpt_response(data_args.model_path, _get_text_message(bd))
+            batch_messages.append(_get_text_message(bd, data_args.mode))
+            response = generate_gpt_response(data_args.model_path, _get_text_message(bd, data_args.mode))
             batch_response.append(response)
 
         all_outputs.extend(batch_response)
@@ -165,7 +206,7 @@ def main():
 
         # Create a result dictionary for this example
         result = input_example
-        result[f"{data_args.model_path}_model_prediction"] = model_answer
+        result[f"model_prediction"] = model_answer
         final_output.append(result)
 
     
