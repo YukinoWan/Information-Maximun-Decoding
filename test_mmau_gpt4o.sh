@@ -7,11 +7,11 @@ MMAU_DIR=data/MMAU
 # MODEL_DIR="mispeech/r1-aqa"
 # MODEL_DIR="Qwen/Qwen2-Audio-7B-Instruct"
 MODEL_DIR="gpt-4o-20241120"
-TEST_NAME="qwen2-5-caption-gpt4o"
+TEST_NAME="r1-aqa-5-caption-gpt4o"
 OUT_DIR=evaluation/test_${TEST_NAME}
 
 
-python3 src/test_mmau.py --model_path ${MODEL_DIR} --data_file evaluation/test_qwen2-5-caption/res_mmau_mini.json --audio_dir ${MMAU_DIR} --out_file ${OUT_DIR}/res_mmau_mini.json --batch_size 1  --mode "5-caption-evaluation" --temperature 0.7 || exit 1
+python3 src/test_mmau.py --model_path ${MODEL_DIR} --data_file caption/test_r1-aqa-5-caption/res_mmau_mini.json --audio_dir ${MMAU_DIR} --out_file ${OUT_DIR}/res_mmau_mini.json --batch_size 1  --mode "5-caption-evaluation" --temperature 0.7 || exit 1
 python3 ${MMAU_DIR}/evaluation.py --input ${OUT_DIR}/res_mmau_mini.json > ${OUT_DIR}/eval_mmau_mini.txt || exit 1
     # python src/test_mmau.py --model_path ${MODEL_DIR} --data_file ${MMAU_DIR}/mmau-test.json --audio_dir ${MMAU_DIR} --out_file ${OUT_DIR}/res_mmau.json --batch_size 32 || exit 1
 # done
