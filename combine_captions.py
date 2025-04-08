@@ -4,7 +4,7 @@ iter = [1, 2, 3, 4, 5]
 
 datas = []
 for i in iter:
-    with open(f"caption/test_r1-aqa-caption-with-question-{i}/res_mmau_mini.json", "r") as f:
+    with open(f"caption/test_qwen2-caption-with-question-{i}/res_mmau_mini.json", "r") as f:
         data =json.load(f)
         datas.append(data)
 
@@ -20,6 +20,6 @@ for i in range(len(datas[0])):
     tmp_dict["model_prediction"] = captions
     output_datas.append(tmp_dict)
 
-with open("caption/test_r1-aqa-5-caption-with-question/res_mmau_mini.json", "w") as f:
+with open("caption/test_qwen2-5-caption-with-question/res_mmau_mini.json", "w") as f:
     json.dump(output_datas, f, indent=4)
 
