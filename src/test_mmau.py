@@ -115,7 +115,18 @@ def _get_text_message(obj_dict, mode):
     if mode == "caption":
         choice_str = f"Please choose the answer from the following options: {obj_dict['choices']}."
         question_template = f"{obj_dict['question']} {choice_str} Output the final answer in <answer> </answer>."
-    else:
+    elif mode == "5-caption-evaluation":
+        choice_str = f"Please choose the answer from the following options: {obj_dict['choices']}."
+        question_template = (
+            f"{obj_dict['question'].replace('given audio', '5 audio captions for the same audio')} "
+            f"{choice_str} Output the final answer in <answer> </answer>.\n"
+            f"Audio caption 1: {obj_dict['model_prediction'][0]}\n"
+            f"Audio caption 2: {obj_dict['model_prediction'][1]}\n"
+            f"Audio caption 3: {obj_dict['model_prediction'][2]}\n"
+            f"Audio caption 4: {obj_dict['model_prediction'][3]}\n"
+            f"Audio caption 5: {obj_dict['model_prediction'][4]}\n"
+        )
+    elif mode == "1-caption-evaluation":
         choice_str = f"Please choose the answer from the following options: {obj_dict['choices']}."
         question_template = (
             f"{obj_dict['question'].replace('given audio', 'audio caption')} "

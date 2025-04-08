@@ -4,9 +4,9 @@ MMAU_DIR=data/MMAU
 
 iters=(1 2 3 4 5)
 for iter in ${iters[*]}; do
-# MODEL_DIR="mispeech/r1-aqa"
-    MODEL_DIR="Qwen/Qwen2-Audio-7B-Instruct"
-    TEST_NAME="qwen2-caption-${iter}"
+MODEL_DIR="mispeech/r1-aqa"
+    # MODEL_DIR="Qwen/Qwen2-Audio-7B-Instruct"
+    TEST_NAME="r1-aqa-caption-${iter}"
     OUT_DIR=evaluation/test_${TEST_NAME}
 
 
