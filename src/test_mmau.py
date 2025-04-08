@@ -126,11 +126,29 @@ def _get_text_message(obj_dict, mode):
             f"Audio caption 4: {obj_dict['model_prediction'][3]}\n"
             f"Audio caption 5: {obj_dict['model_prediction'][4]}\n"
         )
+    elif mode == "5-caption-evaluation-cot":
+        choice_str = f"Please choose the answer from the following options: {obj_dict['choices']}."
+        question_template = (
+            f"{obj_dict['question'].replace('given audio', '5 audio captions for the same audio')} "
+            f"{choice_str} Please think step by step and output the thinking process in <think> </think> and final answer in <answer> </answer>.\n"
+            f"Audio caption 1: {obj_dict['model_prediction'][0]}\n"
+            f"Audio caption 2: {obj_dict['model_prediction'][1]}\n"
+            f"Audio caption 3: {obj_dict['model_prediction'][2]}\n"
+            f"Audio caption 4: {obj_dict['model_prediction'][3]}\n"
+            f"Audio caption 5: {obj_dict['model_prediction'][4]}\n"
+        )
     elif mode == "1-caption-evaluation":
         choice_str = f"Please choose the answer from the following options: {obj_dict['choices']}."
         question_template = (
             f"{obj_dict['question'].replace('given audio', 'audio caption')} "
             f"{choice_str} Output the final answer in <answer> </answer>.\n"
+            f"Audio caption: {obj_dict['model_prediction']}"
+        )
+    elif mode == "1-caption-evaluation-cot":
+        choice_str = f"Please choose the answer from the following options: {obj_dict['choices']}."
+        question_template = (
+            f"{obj_dict['question'].replace('given audio', 'audio caption')} "
+            f"{choice_str} Please think step by step and output the thinking process in <think> </think> and final answer in <answer> </answer>.\n"
             f"Audio caption: {obj_dict['model_prediction']}"
         )
 
@@ -231,15 +249,28 @@ def main():
         if match:
             return match.group(1)
         return output_str
+    
+    def extract_cot(output_str):
+        cot_pattern = r"<think>(.*?)</think>"
+        match = re.search(cot_pattern, output_str)
+        if match:
+            return match.group(1)
+        return ""
 
     final_output = []
     for input_example, model_output in zip(datas, all_outputs):
         original_output = model_output
+
         model_answer = extract_answer(original_output).strip()
+        if "cot" in data_args.mode:
+            model_cot = extract_cot(original_output).strip()
 
         # Create a result dictionary for this example
         result = input_example
         result[f"model_prediction"] = model_answer
+        if "cot" in data_args.mode:
+            result[f"model_cot"] = model_cot
+
         final_output.append(result)
 
     
