@@ -31,7 +31,7 @@ class TestArguments:
     out_file: Optional[str] = field(default=None, metadata={"help": "output file for test"})
     batch_size: Optional[int] =  field(default=16, metadata={"help": "batch size"})
     force: Optional[bool] = field(default=False, metadata={"help": "force test"})
-    mode: Optional[str] = field(default="inference", metadata={"help": "mode"})
+    mode: Optional[str] = field(default="evaluation", metadata={"help": "mode"})
     temperature: Optional[float] = field(default=0.7, metadata={"help": "temperature"})
 
     def __post_init__(self):

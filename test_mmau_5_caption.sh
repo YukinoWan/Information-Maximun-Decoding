@@ -7,7 +7,7 @@ for iter in ${iters[*]}; do
 MODEL_DIR="mispeech/r1-aqa"
     # MODEL_DIR="Qwen/Qwen2-Audio-7B-Instruct"
     TEST_NAME="r1-aqa-caption-${iter}"
-    OUT_DIR=evaluation/test_${TEST_NAME}
+    OUT_DIR=caption/test_${TEST_NAME}
 
 
     python3 src/test_mmau.py --model_path ${MODEL_DIR} --data_file ${MMAU_DIR}/mmau-test-mini.json --audio_dir ${MMAU_DIR} --out_file ${OUT_DIR}/res_mmau_mini.json --batch_size 1  --mode "caption" --temperature 0.7 || exit 1
