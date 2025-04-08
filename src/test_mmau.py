@@ -5,10 +5,18 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional
 import sys
+import whisper
+
+from datetime import timedelta
+from difflib import SequenceMatcher
+from collections import defaultdict
+from transformers import WhisperProcessor, WhisperForConditionalGeneration
+
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import torch
+import torch.nn.functional as F
 import torchaudio
 import transformers
 from tqdm import tqdm
@@ -38,6 +46,49 @@ class TestArguments:
         if self.model_path is None:
             raise ValueError("config path should not none")
 
+def entropy(p):
+    """ 计算概率分布的熵 """
+    return -(p * p.log()).sum()
+
+def entropy_guided_decode(model, mel, tokenizer, temperature=1.0, top_k=5, max_len=448):
+    device = next(model.parameters()).device
+    tokens = [tokenizer.sot]
+    tokens_tensor = torch.tensor([tokens], device=device)
+
+    # 初始化解码器状态
+    decoder_state = None
+
+    for _ in range(max_len):
+        # forward 得到 logits
+        logits = model.decoder(tokens_tensor, audio_features=model.encoder(mel.to(device)))
+        logits = logits[0, -1, :]  # 当前时间步 logits
+
+        # softmax with temperature
+        probs = F.softmax(logits / temperature, dim=-1)
+        top_probs, top_idx = probs.topk(top_k)
+
+        # 对 top-k 候选逐个 lookahead 一步
+        entropies = []
+        for i in range(top_k):
+            next_token = top_idx[i].item()
+            temp_input = torch.tensor([tokens + [next_token]], device=device)
+            next_logits = model.decoder(temp_input, audio_features=model.encoder(mel.to(device)))
+            next_probs = F.softmax(next_logits[0, -1, :] / temperature, dim=-1)
+            entropies.append(entropy(next_probs).item())
+
+        # 选 entropy 最大的候选
+        best_i = torch.tensor(entropies).argmax().item()
+        best_token = top_idx[best_i].item()
+
+        tokens.append(best_token)
+
+        # 终止条件：遇到结束标志
+        if best_token == tokenizer.eot:
+            break
+
+        tokens_tensor = torch.tensor([tokens], device=device)
+
+    return tokenizer.decode(tokens)
 
 def _get_audio(wav_path):
     waveform, sample_rate = torchaudio.load(wav_path)
@@ -221,6 +272,137 @@ def get_gpt4o_response(data_args):
         print(f"Processed batch {i//batch_size + 1}/{(len(datas) + batch_size - 1)//batch_size}")
     return datas, all_outputs
 
+def get_whisper_response(data_args):
+    datas = []
+    with open(data_args.data_file, "r") as f:
+        datas = json.load(f)
+    
+    all_outputs = []
+    model = whisper.load_model("large-v3")  # or "base", "small", etc.
+    for bd in datas:
+        audio_path = os.path.join(data_args.audio_dir, bd["audio_id"])
+        audio = whisper.load_audio(audio_path)
+        mel = whisper.log_mel_spectrogram(audio).to(model.device)
+        tokenizer = model.tokenizer
+        decoded_text = entropy_guided_decode(model, mel, tokenizer, temperature=1.0, top_k=5)
+        all_outputs.append(decoded_text)
+        print(decoded_text)
+        wcn = generate_wcn(model, tokenizer, audio_path)
+        all_outputs.append(wcn)
+        print(wcn)
+        assert False
+
+    return datas, all_outputs
+
+def align_sequences(hypotheses):
+    """Align multiple ASR hypotheses using Levenshtein alignment."""
+    base = hypotheses[0]  # Use first hypothesis as reference
+    alignment = [list(base)]  # Initialize alignment grid
+
+    for hyp in hypotheses[1:]:
+        matcher = SequenceMatcher(None, base, hyp)
+        aligned_hyp = []
+        base_idx = 0
+
+        for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+            if tag == "equal":
+                aligned_hyp.extend(hyp[j1:j2])
+            elif tag == "insert":
+                aligned_hyp.extend(hyp[j1:j2])
+            elif tag == "replace":
+                aligned_hyp.extend(hyp[j1:j2])
+            elif tag == "delete":
+                aligned_hyp.extend(["-"] * (i2 - i1))  # Placeholder for missing words
+
+            base_idx = i2
+
+        alignment.append(aligned_hyp)
+
+    return list(map(list, zip(*alignment)))  # Transpose for word-position alignment
+
+
+def transcribe_with_timestamps(audio_path, model, t, segment_length=1.0):
+    # Get the full transcription with timestamps
+    result = model.transcribe(
+        audio_path,
+        word_timestamps=True,
+        temperature=t,  # Enable word-level timestamps
+    )
+    
+    # Initialize containers for segments
+    current_segment = []
+    current_start = 0
+    segments_by_second = []
+
+    # Process each word
+    for segment in result["segments"]:
+        for word in segment["words"]:
+            start_time = word["start"]
+            text = word["word"]
+            
+            # If we've passed the segment length or it's the first word
+            if start_time - current_start >= segment_length or not current_segment:
+                if current_segment:
+                    segments_by_second.append({
+                        "start": current_start,
+                        "end": start_time,
+                        "text": "".join(current_segment).strip()
+                    })
+                current_segment = [text]
+                current_start = start_time
+            else:
+                current_segment.append(text)
+
+    # Add the last segment if there's anything remaining
+    if current_segment:
+        segments_by_second.append({
+            "start": current_start,
+            "end": result["segments"][-1]["end"],
+            "text": "".join(current_segment).strip()
+        })
+
+    print("segments_by_second:")
+    for segment in segments_by_second:
+        start_time = str(timedelta(seconds=round(segment["start"])))
+        end_time = str(timedelta(seconds=round(segment["end"])))
+        print(f"[{start_time} -> {end_time}] {segment['text']}")
+
+    # print(" ".join([s["text"] for s in segments_by_second]))
+    # assert False
+    return " ".join([s["text"] for s in segments_by_second])
+
+
+def generate_wcn(model, processor, audio_path):
+    hypotheses = [transcribe_with_timestamps(audio_path, model, t).split() for t in [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]]
+    # hypotheses = [transcribe_with_timestamps(audio_path, model, t).split() for t in [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]]
+
+    aligned_cn = align_sequences(hypotheses)
+    # print(aligned_cn)
+    word_counts = defaultdict(lambda: defaultdict(int))
+
+    for index, position in enumerate(aligned_cn):  # 使用索引
+        for word in position:
+            if word != "-":  
+                word_counts[index][word] += 1  # 用 index 作为键
+
+    # print(word_counts)
+    # Convert counts to probabilities
+    word_probs = {
+        pos: {word: count / sum(words.values()) for word, count in words.items()}
+        for pos, words in word_counts.items()
+    }
+    # print(word_probs)
+
+    # Print the Word Confusion Network
+    print("\nWord Confusion Network (WCN):")
+    for pos, words in word_probs.items():
+        print(f"Position {pos}: {', '.join([f'{w} ({p:.2f})' for w, p in words.items()])}")
+
+    # Print the WCN in a string format
+    wcn_str = ""
+    for pos, words in word_probs.items():
+        wcn_str += f"Position {pos}: {', '.join([f'{w} ({p:.2f})' for w, p in words.items()])}"
+    return wcn_str
 
 def main():
     parser = HfArgumentParser(TestArguments)
@@ -239,6 +421,8 @@ def main():
 
     if "gpt" in data_args.model_path:
         datas, all_outputs = get_gpt4o_response(data_args)
+    elif "whisper" in data_args.model_path:
+        datas, all_outputs = get_whisper_response(data_args)
     else:
         datas, all_outputs = get_qwen2_audio_response(data_args)
 
