@@ -46,49 +46,35 @@ class TestArguments:
         if self.model_path is None:
             raise ValueError("config path should not none")
 
-def entropy(p):
-    """ 计算概率分布的熵 """
-    return -(p * p.log()).sum()
 
-def entropy_guided_decode(model, mel, tokenizer, temperature=1.0, top_k=5, max_len=448):
-    device = next(model.parameters()).device
-    tokens = [tokenizer.sot]
-    tokens_tensor = torch.tensor([tokens], device=device)
+def entropy_aware_decode(model, processor, inputs, top_k=5, temperature=1.0, max_length=128):
+    eos_token_id = processor.tokenizer.eos_token_id
+    decoder_input_ids = torch.tensor([[processor.tokenizer.bos_token_id]], device=model.device)
 
-    # 初始化解码器状态
-    decoder_state = None
+    for _ in range(max_length):
+        outputs = model(input_features=inputs["input_features"], decoder_input_ids=decoder_input_ids)
+        logits = outputs.logits[:, -1, :] / temperature
+        probs = F.softmax(logits, dim=-1)
 
-    for _ in range(max_len):
-        # forward 得到 logits
-        logits = model.decoder(tokens_tensor, audio_features=model.encoder(mel.to(device)))
-        logits = logits[0, -1, :]  # 当前时间步 logits
-
-        # softmax with temperature
-        probs = F.softmax(logits / temperature, dim=-1)
-        top_probs, top_idx = probs.topk(top_k)
-
-        # 对 top-k 候选逐个 lookahead 一步
+        top_probs, top_ids = probs.topk(top_k)
         entropies = []
+
         for i in range(top_k):
-            next_token = top_idx[i].item()
-            temp_input = torch.tensor([tokens + [next_token]], device=device)
-            next_logits = model.decoder(temp_input, audio_features=model.encoder(mel.to(device)))
-            next_probs = F.softmax(next_logits[0, -1, :] / temperature, dim=-1)
-            entropies.append(entropy(next_probs).item())
+            next_token = top_ids[:, i].unsqueeze(0)
+            temp_ids = torch.cat([decoder_input_ids, next_token], dim=-1)
+            next_logits = model(input_features=inputs["input_features"], decoder_input_ids=temp_ids).logits[:, -1, :]
+            next_probs = F.softmax(next_logits, dim=-1)
+            entropy = -(next_probs * next_probs.log()).sum().item()
+            entropies.append(entropy)
 
-        # 选 entropy 最大的候选
-        best_i = torch.tensor(entropies).argmax().item()
-        best_token = top_idx[best_i].item()
+        best_token = top_ids[0, torch.tensor(entropies).argmax()].item()
+        decoder_input_ids = torch.cat([decoder_input_ids, torch.tensor([[best_token]], device=model.device)], dim=-1)
 
-        tokens.append(best_token)
-
-        # 终止条件：遇到结束标志
-        if best_token == tokenizer.eot:
+        if best_token == eos_token_id:
             break
 
-        tokens_tensor = torch.tensor([tokens], device=device)
+    return processor.batch_decode(decoder_input_ids[:, 1:], skip_special_tokens=True)[0]
 
-    return tokenizer.decode(tokens)
 
 def _get_audio(wav_path):
     waveform, sample_rate = torchaudio.load(wav_path)
@@ -272,25 +258,163 @@ def get_gpt4o_response(data_args):
         print(f"Processed batch {i//batch_size + 1}/{(len(datas) + batch_size - 1)//batch_size}")
     return datas, all_outputs
 
+
+
+def compute_log_p_y(text):
+    ids = gpt2_tokenizer(text, return_tensors="pt").input_ids.to("cuda")
+    with torch.no_grad():
+        loss = gpt2(input_ids=ids, labels=ids).loss.item()
+    return -loss * ids.size(1)
+
+def mi_rerank(model, processor, inputs, num_return_sequences=5):
+    outputs = model.generate(
+        input_features=inputs["input_features"],
+        do_sample=True,
+        temperature=1.0,
+        num_return_sequences=num_return_sequences,
+        max_length=128,
+        return_dict_in_generate=True,
+        output_scores=True
+    )
+
+    decoded = processor.batch_decode(outputs.sequences, skip_special_tokens=True)
+    mi_scores = []
+
+    for i, text in enumerate(decoded):
+        log_py = compute_log_p_y(text)
+        whisper_logp = sum(outputs.scores[j][i, token_id].item()
+                           for j, token_id in enumerate(outputs.sequences[i][1:]))
+        mi = whisper_logp - log_py
+        mi_scores.append((text, mi))
+
+    best_text = sorted(mi_scores, key=lambda x: x[1], reverse=True)[0][0]
+    return best_text
+
+def masked_attention_decode(model, processor, inputs, window=0, max_length=128):
+    eos_token_id = processor.tokenizer.eos_token_id
+    decoder_input_ids = torch.tensor([[processor.tokenizer.bos_token_id]], device=model.device)
+
+    for step in range(max_length):
+        # 只保留最近 window 个 token
+        truncated_ids = decoder_input_ids[:, -window:] if window > 0 else decoder_input_ids[:, -1:]
+
+        outputs = model(input_features=inputs["input_features"], decoder_input_ids=truncated_ids)
+        logits = outputs.logits[:, -1, :]
+        next_token = torch.argmax(logits, dim=-1).unsqueeze(-1)
+        decoder_input_ids = torch.cat([decoder_input_ids, next_token], dim=-1)
+
+        if next_token.item() == eos_token_id:
+            break
+
+    return processor.batch_decode(decoder_input_ids[:, 1:], skip_special_tokens=True)[0]
+
+import torch
+import torch.nn.functional as F
+from transformers import WhisperProcessor, WhisperForConditionalGeneration
+
+def entropy_aware_decode_robust(model, processor, inputs, top_k=5, temperature=0.8, max_length=128, alpha=0.3):
+    eos_token_id = processor.tokenizer.eos_token_id
+    bos_token_id = processor.tokenizer.bos_token_id
+
+    # decoder_input_ids = torch.tensor([[bos_token_id]], device=model.device)
+    decoder_input_ids = torch.tensor([processor.get_decoder_prompt_ids(language="en", task="transcribe")], device=model.device)
+
+    token_history = []
+    repeat_count = {}
+
+    for step in range(max_length):
+        # Get logits for current step
+        outputs = model(input_features=inputs["input_features"], decoder_input_ids=decoder_input_ids)
+        # outputs = model(**inputs, decoder_input_ids=decoder_input_ids)
+
+        logits = outputs.logits[:, -1, :] / temperature
+        probs = F.softmax(logits, dim=-1)
+
+        top_probs, top_ids = probs.topk(top_k)
+        entropies = []
+        scores = []
+
+        for i in range(top_k):
+            candidate_id = top_ids[0, i].item()
+            temp_ids = torch.cat([decoder_input_ids, torch.tensor([[candidate_id]], device=model.device)], dim=-1)
+            next_logits = model(input_features=inputs["input_features"], decoder_input_ids=temp_ids).logits[:, -1, :]
+            next_probs = F.softmax(next_logits, dim=-1)
+
+            entropy = -(next_probs * next_probs.log()).sum().item()
+            prob_score = probs[0, candidate_id].item()
+            combined_score = 0.0 * entropy + alpha * prob_score  # 融合熵和概率得分
+
+            entropies.append(entropy)
+            scores.append(combined_score)
+
+        best_i = torch.tensor(scores).argmax().item()
+        best_token = top_ids[0, best_i].item()
+
+        # 重复检测
+        if best_token in repeat_count:
+            repeat_count[best_token] += 1
+        else:
+            repeat_count[best_token] = 1
+
+        # if repeat_count[best_token] > 6:
+        #     print("⚠️ Too much repetition, stopping decode.")
+        #     break
+
+        token_history.append(best_token)
+        decoder_input_ids = torch.cat([decoder_input_ids, torch.tensor([[best_token]], device=model.device)], dim=-1)
+
+        # 打印每一步调试日志
+        print(f"Step {step}: Token = {processor.tokenizer.decode([best_token])}, Score = {scores[best_i]:.2f}, Entropy = {entropies[best_i]:.2f}")
+
+        if best_token == eos_token_id:
+            break
+
+    # Decode final result
+    return processor.batch_decode(decoder_input_ids[:, 1:], skip_special_tokens=True)[0]
+
+
 def get_whisper_response(data_args):
+
+
     datas = []
     with open(data_args.data_file, "r") as f:
         datas = json.load(f)
     
     all_outputs = []
-    model = whisper.load_model("large-v3")  # or "base", "small", etc.
+    processor = WhisperProcessor.from_pretrained("openai/whisper-large-v3")
+    # model = whisper.load_model("large-v3")
+
+
+
+    model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-large-v3").to("cuda")
+
     for bd in datas:
+        # print(bd)
+        if bd["task"] != "speech":
+            continue
         audio_path = os.path.join(data_args.audio_dir, bd["audio_id"])
-        audio = whisper.load_audio(audio_path)
-        mel = whisper.log_mel_spectrogram(audio).to(model.device)
-        tokenizer = model.tokenizer
-        decoded_text = entropy_guided_decode(model, mel, tokenizer, temperature=1.0, top_k=5)
-        all_outputs.append(decoded_text)
-        print(decoded_text)
-        wcn = generate_wcn(model, tokenizer, audio_path)
-        all_outputs.append(wcn)
-        print(wcn)
+        waveform, sr = torchaudio.load(audio_path)  
+        if sr != 16000:
+            waveform = torchaudio.transforms.Resample(orig_freq=sr, new_freq=16000)(waveform)
+            sr = 16000
+        if waveform.shape[0] > 1:
+            waveform = waveform.mean(dim=0)  # 将立体声变为单声道
+        else:
+            waveform = waveform.squeeze(0)
+        inputs = processor(waveform, sampling_rate=sr, return_tensors="pt").to("cuda")
+
+        # asr_result = model.transcribe(audio_path, word_timestamps=True, temperature=0.8)["text"]
+        text_entropy = entropy_aware_decode_robust(model, processor, inputs, top_k=5, temperature=0.8, alpha=1.0)
+        # text_masked = masked_attention_decode(model, processor, inputs, window=1)
+        print(text_entropy)
+        # print(text_masked)
         assert False
+        # all_outputs.append(text_masked)
+        # print(text_masked)
+        wcn = generate_wcn(model, processor, audio_path)
+        all_outputs.append(wcn)
+        # print(wcn)
+        # assert False
 
     return datas, all_outputs
 
