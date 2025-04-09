@@ -382,38 +382,38 @@ def get_whisper_response(data_args):
     
     all_outputs = []
     processor = WhisperProcessor.from_pretrained("openai/whisper-large-v3")
-    # model = whisper.load_model("large-v3")
+    model = whisper.load_model("large-v3")
 
 
 
-    model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-large-v3").to("cuda")
+    # model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-large-v3").to("cuda")
 
     for bd in datas:
         # print(bd)
-        if bd["task"] != "speech":
-            continue
+        # if bd["task"] != "speech":
+        #     continue
         audio_path = os.path.join(data_args.audio_dir, bd["audio_id"])
-        waveform, sr = torchaudio.load(audio_path)  
-        if sr != 16000:
-            waveform = torchaudio.transforms.Resample(orig_freq=sr, new_freq=16000)(waveform)
-            sr = 16000
-        if waveform.shape[0] > 1:
-            waveform = waveform.mean(dim=0)  # 将立体声变为单声道
-        else:
-            waveform = waveform.squeeze(0)
-        inputs = processor(waveform, sampling_rate=sr, return_tensors="pt").to("cuda")
+        # waveform, sr = torchaudio.load(audio_path)  
+        # if sr != 16000:
+        #     waveform = torchaudio.transforms.Resample(orig_freq=sr, new_freq=16000)(waveform)
+        #     sr = 16000
+        # if waveform.shape[0] > 1:
+        #     waveform = waveform.mean(dim=0)  # 将立体声变为单声道
+        # else:
+        #     waveform = waveform.squeeze(0)
+        # inputs = processor(waveform, sampling_rate=sr, return_tensors="pt").to("cuda")
 
-        # asr_result = model.transcribe(audio_path, word_timestamps=True, temperature=0.8)["text"]
-        text_entropy = entropy_aware_decode_robust(model, processor, inputs, top_k=5, temperature=0.8, alpha=1.0)
-        # text_masked = masked_attention_decode(model, processor, inputs, window=1)
-        print(text_entropy)
-        # print(text_masked)
-        assert False
+        # # asr_result = model.transcribe(audio_path, word_timestamps=True, temperature=0.8)["text"]
+        # text_entropy = entropy_aware_decode_robust(model, processor, inputs, top_k=5, temperature=0.8, alpha=1.0)
+        # # text_masked = masked_attention_decode(model, processor, inputs, window=1)
+        # print(text_entropy)
+        # # print(text_masked)
+        # assert False
         # all_outputs.append(text_masked)
         # print(text_masked)
         wcn = generate_wcn(model, processor, audio_path)
         all_outputs.append(wcn)
-        # print(wcn)
+        print(wcn)
         # assert False
 
     return datas, all_outputs
