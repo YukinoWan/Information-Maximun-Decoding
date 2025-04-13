@@ -1,0 +1,43 @@
+******************************
+Task-wise Accuracy:
+sound : 51.65% over 333 samples
+music : 44.31% over 334 samples
+speech : 60.06% over 333 samples
+******************************
+Difficulty-wise Accuracy:
+easy : 37.21% over 258 samples
+hard : 51.29% over 232 samples
+medium : 59.80% over 510 samples
+******************************
+Sub-category-wise Accuracy:
+Acoustic Source Inference : 64.58% over 48 samples
+Temporal Event Reasoning : 27.08% over 48 samples
+Dissonant Emotion Interpretation : 90.00% over 20 samples
+Event-Based Knowledge Retrieval : 90.00% over 20 samples
+Counting : 45.00% over 20 samples
+Phonemic Stress Pattern Analysis : 43.79% over 153 samples
+Emotion State summarisation : 55.00% over 20 samples
+Conversational Fact Retrieval : 90.00% over 20 samples
+Key highlight Extraction : 90.00% over 20 samples
+Multi Speaker Role Mapping : 100.00% over 20 samples
+Phonological Sequence Decoding : 50.00% over 20 samples
+Emotion Flip Detection : 55.00% over 20 samples
+Instrumentation : 31.43% over 35 samples
+Temporal Reasoning : 14.29% over 56 samples
+Lyrical Reasoning : 90.00% over 10 samples
+Socio-cultural Interpretation : 60.00% over 20 samples
+Rhythm and Tempo Understanding : 39.13% over 46 samples
+Musical Texture Interpretation : 52.94% over 34 samples
+Melodic Structure Interpretation : 42.42% over 33 samples
+Harmony and Chord Progressions : 54.55% over 33 samples
+Musical Genre Reasoning : 58.82% over 34 samples
+Event-Based Sound Reasoning : 68.75% over 48 samples
+Emotional Tone Interpretation : 60.61% over 33 samples
+Eco-Acoustic Knowledge : 97.87% over 47 samples
+Ambient Sound Interpretation : 25.00% over 48 samples
+Acoustic Scene Reasoning : 35.42% over 48 samples
+Sound-Based Event Recognition : 43.48% over 46 samples
+******************************
+Total Accuracy: 52.00% over 1000 samples
+******************************
+No prediction count: 0
