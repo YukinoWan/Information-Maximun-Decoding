@@ -1,14 +1,29 @@
 import logging
 from dataclasses import dataclass, field
 from typing import Optional
-
+import torch
+import torch.nn as nn
+from transformers import HfArgumentParser, WhisperProcessor, WhisperForConditionalGeneration
 import transformers
-from transformers import HfArgumentParser
 from trl import GRPOConfig
 
 from trainer.grpo_trainer import GRPOTrainer
 from utils.rewards import accuracy_reward, format_reward
 from dataset.dataset import AudioDataset
+
+
+class WhisperHiddenStateMapper(nn.Module):
+    def __init__(self, input_dim, output_dim):
+        super().__init__()
+        self.mapper = nn.Sequential(
+            nn.Linear(input_dim, 512),
+            nn.ReLU(),
+            nn.Linear(512, output_dim)
+        )
+    
+    def forward(self, hidden_states):
+        # hidden_states shape: (batch_size, seq_len, hidden_dim)
+        return self.mapper(hidden_states)
 
 
 @dataclass

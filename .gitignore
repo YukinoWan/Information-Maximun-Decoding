@@ -173,8 +173,10 @@ debug*
 Qwen
 
 # Data
-data/AVQA
+data/
 data/MMAU/
+
+trainable_token/output
 
 # Work
 exp
