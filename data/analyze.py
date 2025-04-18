@@ -66,15 +66,15 @@ def download_audio(video_id, start_sec, split, output_path):
         "-o", output_path
     ]
 
-    try:
-        result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        if result.returncode != 0:
-            print(f"❌ Failed {video_id}")
-            return f"❌ Failed {video_id}"
-        return f"✅ Downloaded {output_path}"
-    except Exception as e:
-        print(f"❌ Exception for {video_id}: {e}")
-        return f"❌ Exception for {video_id}: {e}"
+    # try:
+    result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if result.returncode != 0:
+        print(f"❌ Failed {video_id}")
+        return f"❌ Failed {video_id}"
+    return f"✅ Downloaded {output_path}"
+    # except Exception as e:
+    print(f"❌ Exception for {video_id}: {e}")
+    return f"❌ Exception for {video_id}: {e}"
 
 # 并发执行任务并显示进度条
 results = []
