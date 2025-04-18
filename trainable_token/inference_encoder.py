@@ -1,5 +1,5 @@
 import os
-os.environ['CUDA_LAUNCH_BLOCKING'] = '0'
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 import torch
 import torchaudio
@@ -19,8 +19,8 @@ def load_models(device="cuda"):
     whisper_model = whisper_model.to(device)
     whisper_model.eval()
 
-    qwen_tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2-7B-Instruct")
-    qwen_model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2-7B-Instruct")
+    qwen_tokenizer = AutoTokenizer.from_pretrained("/home/zhen/internal_llm/internal_llm")
+    qwen_model = AutoModelForCausalLM.from_pretrained("/home/zhen/internal_llm/internal_llm", attn_implementation="flash_attention_2", device_map="auto")
     qwen_model = qwen_model.to(device)
     qwen_model.eval()
 
@@ -28,7 +28,7 @@ def load_models(device="cuda"):
     embedding_dim = qwen_model.get_input_embeddings().weight.size(1)
     decoder_hidden_size = whisper_model.config.d_model
     frame_tokenizer = FrameTokenizer(encoder_dim=1280, embedding_dim=embedding_dim)
-    frame_tokenizer.load_state_dict(torch.load("./output/mmau_frame_tokenizer_encoder_epoch_1.pt"))
+    frame_tokenizer.load_state_dict(torch.load("./output/Rllm_decoder_only/MMAU_frame_decoder_tokenizer_0.pt"))
     frame_tokenizer = frame_tokenizer.to(device)
     frame_tokenizer.eval()
 
