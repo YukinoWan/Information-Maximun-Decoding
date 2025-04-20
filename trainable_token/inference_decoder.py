@@ -16,8 +16,8 @@ def load_models(device="cuda"):
     # Load models
     whisper_processor = WhisperProcessor.from_pretrained("openai/whisper-large-v3")
     whisper_model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-large-v3")
-    if False:
-        whisper_model = PeftModel.from_pretrained(whisper_model, "output/adapter/mmau_whisper_adapter_6.pt")
+    if True:
+        whisper_model = PeftModel.from_pretrained(whisper_model, "./output/decoder_only/MMAU_encoder_adapter_6.pt")
     whisper_model = whisper_model.to(device)
     whisper_model.eval()
 
@@ -30,7 +30,7 @@ def load_models(device="cuda"):
     embedding_dim = qwen_model.get_input_embeddings().weight.size(1)
     decoder_hidden_size = whisper_model.config.d_model
     frame_tokenizer = FrameTokenizer(hidden_size=decoder_hidden_size, embedding_dim=embedding_dim)
-    frame_tokenizer.load_state_dict(torch.load("./output/decoder_only/full_frame_adapter_decoder_tokenizer_2.pt"))
+    frame_tokenizer.load_state_dict(torch.load("./output/decoder_only/MMAU_encoder_adapter_frame_decoder_tokenizer_6.pt"))
     frame_tokenizer = frame_tokenizer.to(device)
     frame_tokenizer.eval()
 
@@ -163,7 +163,7 @@ def extract_answer(output_str):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_path", type=str, default="/home/zhen/Information-Maximun-Decoding/data/MMAU/test_final_sub.json")
-    parser.add_argument("--output_path", type=str, default="./evaluation_output/inference_full_train_decoder_only_subset_ckpt2_results.json")
+    parser.add_argument("--output_path", type=str, default="./evaluation_output/inference_MMAU_encoder_adapter_decoder_tokenizer_subset_ckpt6_results.json")
     args = parser.parse_args()
 
     # Set device
