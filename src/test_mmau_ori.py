@@ -22,7 +22,7 @@ import transformers
 from tqdm import tqdm
 from transformers import AutoProcessor, HfArgumentParser, Qwen2AudioForConditionalGeneration
 
-from APIs.gpt import generate_gpt_response
+from APIs.gpt import generate_gpt_response, get_nim_response
 
 @dataclass
 class TestArguments:
@@ -251,7 +251,10 @@ def get_gpt4o_response(data_args):
 
         batch_response = []
         for bd in batch_data:
-            response = generate_gpt_response(data_args.model_path, _get_text_message(bd, data_args.mode))
+            if "gpt" in data_args.model_path:
+                response = generate_gpt_response(data_args.model_path, _get_text_message(bd, data_args.mode))
+            elif "nvidia" in data_args.model_path:
+                response = get_nim_response(data_args.model_path, _get_text_message(bd, data_args.mode))
             batch_response.append(response)
 
         all_outputs.extend(batch_response)
@@ -543,7 +546,7 @@ def main():
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
 
-    if "gpt" in data_args.model_path:
+    if "gpt" or "nvidia" in data_args.model_path:
         datas, all_outputs = get_gpt4o_response(data_args)
     elif "whisper" in data_args.model_path:
         datas, all_outputs = get_whisper_response(data_args)
