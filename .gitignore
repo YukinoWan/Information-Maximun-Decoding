@@ -173,7 +173,8 @@ debug*
 Qwen
 
 # Data
-data/
+data/AVQA_Audio
+data/AVQA.zip
 data/MMAU/
 
 trainable_token/output

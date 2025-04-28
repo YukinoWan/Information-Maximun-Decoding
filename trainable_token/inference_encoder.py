@@ -1,5 +1,5 @@
 import os
-os.environ['CUDA_LAUNCH_BLOCKING'] = '0'
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 import torch
 import torchaudio
@@ -19,8 +19,8 @@ def load_models(device="cuda"):
     whisper_model = whisper_model.to(device)
     whisper_model.eval()
 
-    qwen_tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2-7B-Instruct")
-    qwen_model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2-7B-Instruct")
+    qwen_tokenizer = AutoTokenizer.from_pretrained("/home/zhen/internal_llm/internal_llm")
+    qwen_model = AutoModelForCausalLM.from_pretrained("/home/zhen/internal_llm/internal_llm", device_map="auto")
     qwen_model = qwen_model.to(device)
     qwen_model.eval()
 
@@ -28,7 +28,7 @@ def load_models(device="cuda"):
     embedding_dim = qwen_model.get_input_embeddings().weight.size(1)
     decoder_hidden_size = whisper_model.config.d_model
     frame_tokenizer = FrameTokenizer(encoder_dim=1280, embedding_dim=embedding_dim)
-    frame_tokenizer.load_state_dict(torch.load("./output/mmau_frame_tokenizer_encoder_epoch_1.pt"))
+    frame_tokenizer.load_state_dict(torch.load("./output/Rllm_decoder_only/MMAU_frame_decoder_tokenizer_0.pt"))
     frame_tokenizer = frame_tokenizer.to(device)
     frame_tokenizer.eval()
 
@@ -81,12 +81,14 @@ def generate_answer(question, whisper_text, token_embeddings, qwen_tokenizer, qw
             f"Here is an audio transcription with hints (e.g.,sound, music, etc.) at each time stamp: {whisper_text} \nHints: \n"
             f"{question}\n"
             f"Please provide your answer in the format: The answer is <answer>your_answer</answer>"
+            # f"Please provide your answer in the format: The answer is <answer>your_answer</answer>"
         )
 
         # Prepare messages for chat template
         messages = [
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prompt}
+            # {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": prompt},
+            {"role": "assistant", "content": "<think>\n"}
         ]
 
         # Get instruction embeddings
@@ -122,9 +124,9 @@ def generate_answer(question, whisper_text, token_embeddings, qwen_tokenizer, qw
         with torch.no_grad():
             outputs = qwen_model.generate(
                 inputs_embeds=input_embeddings,
-                max_new_tokens=100,
-                do_sample=True,
-                temperature=0.7,
+                max_new_tokens=2048,
+                do_sample=False,
+                temperature=0.0,
                 top_p=0.9
             )
             generated_text = qwen_tokenizer.decode(outputs[0], skip_special_tokens=True)
@@ -149,7 +151,7 @@ def extract_answer(output_str):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_path", type=str, default="/home/zhen/Information-Maximun-Decoding/data/MMAU/test_final_sub.json")
-    parser.add_argument("--output_path", type=str, default="evaluation_output/inference_encoder_subset_ckpt0_results.json")
+    parser.add_argument("--output_path", type=str, default="evaluation_output/inference_reasoning_llm_results_0.json")
     args = parser.parse_args()
 
     # Set device
@@ -199,7 +201,7 @@ def main():
             )
             
             # Extract answer and label
-            answer = extract_answer(generated_text)
+            answer = extract_answer(generated_text.split("</think>")[1])
             label = extract_answer(ground_truth)
             
             # Calculate accuracy
@@ -235,6 +237,7 @@ def main():
 
         except Exception as e:
             print(f"Error processing {audio_path}: {str(e)}")
+            print(f"Generated text: {generated_text}")
             continue
 
     # Save all results

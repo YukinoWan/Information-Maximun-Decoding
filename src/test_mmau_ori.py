@@ -1,16 +1,17 @@
 import json
 import logging
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import re
 from dataclasses import dataclass, field
 from typing import Optional
 import sys
 # import whisper
-
+from vllm import LLM, SamplingParams
 from datetime import timedelta
 from difflib import SequenceMatcher
 from collections import defaultdict
-from transformers import WhisperProcessor, WhisperForConditionalGeneration
+from transformers import WhisperProcessor, WhisperForConditionalGeneration, AutoTokenizer
 
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -261,6 +262,43 @@ def get_gpt4o_response(data_args):
         print(f"Processed batch {i//batch_size + 1}/{(len(datas) + batch_size - 1)//batch_size}")
     return datas, all_outputs
 
+def get_vllm_response(data_args):
+    llm = LLM(model=data_args.model_path, tensor_parallel_size=1, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(data_args.model_path, trust_remote_code=True)
+
+    datas = []
+    with open(data_args.data_file, "r") as f:
+        datas = json.load(f)
+    
+    all_outputs = []
+    batch_size = data_args.batch_size
+    for i in tqdm(range(0, len(datas), batch_size)):
+        batch_data = datas[i : i + batch_size]
+
+
+        batch_response = []
+        for bd in batch_data:
+            prompt = _get_text_message(bd, data_args.mode)
+            if "internal_llm" in data_args.model_path:
+                prompts = [tokenizer.apply_chat_template([{'role': 'user', 'content': f"{prompt}\n<think>"}],
+                tokenize=False, 
+                add_generation_prompt=True 
+                )]
+            else:
+                prompts = [tokenizer.apply_chat_template([{'role': 'user', 'content': f"{prompt}"}],
+                tokenize=False, 
+                add_generation_prompt=True 
+                )]
+            sampling_params = SamplingParams(n=1, temperature=data_args.temperature, max_tokens=4096)
+            outputs = llm.generate(prompts, sampling_params)
+            batch_response.append(outputs[0].outputs[0].text)
+            # print(batch_response)
+            # batch_response.append(batch_response)
+            # print(batch_response)
+            # assert False
+        all_outputs.extend(batch_response)
+        print(f"Processed batch {i//batch_size + 1}/{(len(datas) + batch_size - 1)//batch_size}")
+    return datas, all_outputs
 
 
 def compute_log_p_y(text):
@@ -550,8 +588,10 @@ def main():
         datas, all_outputs = get_gpt4o_response(data_args)
     elif "whisper" in data_args.model_path:
         datas, all_outputs = get_whisper_response(data_args)
-    else:
+    elif "Qwen2-Audio" in data_args.model_path:
         datas, all_outputs = get_qwen2_audio_response(data_args)
+    else:
+        datas, all_outputs = get_vllm_response(data_args)
 
     def extract_answer(output_str):
         answer_pattern = r"<answer>(.*?)</answer>"
@@ -578,6 +618,9 @@ def main():
 
         # Create a result dictionary for this example
         result = input_example
+        # print(original_output)
+        # assert False
+        result["model_output"] = original_output
         result[f"model_prediction"] = model_answer
         if "cot" in data_args.mode:
             result[f"model_cot"] = model_cot

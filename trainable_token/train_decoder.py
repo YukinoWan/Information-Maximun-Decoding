@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 from peft import get_peft_config, get_peft_model, IA3Config, TaskType
 
@@ -350,8 +350,12 @@ class QAExampleDataset(Dataset):
 
     def __getitem__(self, idx):
         item = self.data[idx]
-        audio_tensor, _ = torchaudio.load(item["audio"])  # (channels, length)
-
+        # print("Trying to load:", item["audio"])
+        try:
+            audio_tensor, _ = torchaudio.load(item["audio"])  # (channels, length)
+        except Exception as e:
+            print(f"Error in loading audio: {e}")
+            return self.__getitem__((idx + 1) % len(self))
         # 👉 转成 float32 + 单通道
         if audio_tensor.dim() == 2:  # stereo
             audio_tensor = audio_tensor.mean(dim=0)  # -> mono
@@ -373,13 +377,19 @@ def train_loop(dataloader, trainer, epochs=1):
         total_acc = 0
         
         for i, batch in enumerate(pbar):
+            if batch is None:
+                continue
             # Clear CUDA cache at the start of each batch
             torch.cuda.empty_cache()
             
             audio = batch['audio'].to(trainer.device)
             question = batch['question']
             answer = batch['answer']
-            loss, acc = trainer.training_step(audio, question, answer)
+            try:
+                loss, acc = trainer.training_step(audio, question, answer)
+            except Exception as e:
+                print(f"Error in training_step: {e}")
+                continue
             total_loss += loss
             total_acc += acc
             
@@ -399,10 +409,10 @@ def train_loop(dataloader, trainer, epochs=1):
             
         avg_loss = total_loss / len(dataloader)
         print(f"\nEpoch {epoch+1}, Avg Loss: {avg_loss:.4f}")
-        if False:
-            trainer.whisper_model.save_pretrained(f"output/adapter/mmau_whisper_adapter_{epoch}.pt")
+        if True:
+            trainer.whisper_model.save_pretrained(f"output/decoder_only/MMAU_encoder_adapter_{epoch}.pt")
 
-        save_tokenizer(trainer.frame_tokenizer, f"output/adapter/mmau_frame_adapter_decoder_tokenizer_{epoch}.pt")
+        save_tokenizer(trainer.frame_tokenizer, f"output/decoder_only/MMAU_encoder_adapter_frame_decoder_tokenizer_{epoch}.pt")
 
 def save_tokenizer(frame_tokenizer, path="frame_tokenizer.pt"):
     torch.save(frame_tokenizer.state_dict(), path)
@@ -418,9 +428,14 @@ if __name__ == "__main__":
     # Load models
     whisper_processor = WhisperProcessor.from_pretrained("openai/whisper-large-v3")
     whisper_model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-large-v3")
-    if False:
+    if True:
+        target_modules = []
+        for name, module in whisper_model.model.encoder.named_modules():
+            print(name)
+            if "k_proj" in name or "v_proj" in name:
+                target_modules.append(name)
         peft_config = IA3Config(
-            target_modules=["k_proj", "v_proj", "down_proj"], feedforward_modules=["down_proj"]
+            target_modules=target_modules, feedforward_modules=[]
         )
         whisper_model = get_peft_model(whisper_model, peft_config)
         whisper_model.print_trainable_parameters()
@@ -465,7 +480,7 @@ if __name__ == "__main__":
     total_params = sum(p.numel() for p in frame_tokenizer.parameters() if p.requires_grad)
 
     print(f"Trainable parameters: {total_params}")
-    assert False
+    # assert False
     # 创建优化器，只优化frame tokenizer
     optimizer = torch.optim.AdamW([
         {"params": frame_tokenizer.parameters(), "lr": 1e-4}
