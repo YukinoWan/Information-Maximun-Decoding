@@ -1,6 +1,7 @@
 #!/bin/bash
 
 MMAU_DIR=data/MMAU
+#test#
 
 # iters=(1 2 3 4 5)
 # for iter in ${iters[*]}; do
